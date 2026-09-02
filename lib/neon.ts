@@ -52,7 +52,12 @@ type Database = {
 export const neon = createClient<Database>({
   auth: {
     url: resolvedAuthUrl,
-    adapter: BetterAuthReactAdapter(),
+    // The Neon Auth service lives on a different origin than this app, so
+    // the session cookie is cross-origin: without `credentials: "include"`
+    // the browser silently drops it on every request, the client sees no
+    // session, and Data API calls fall back to an anonymous token that RLS
+    // (scoped to `authenticated`) then rejects with a 403.
+    adapter: BetterAuthReactAdapter({ fetchOptions: { credentials: "include" } }),
   },
   dataApi: {
     url: resolvedDataApiUrl,

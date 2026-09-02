@@ -22,6 +22,12 @@ create table if not exists contacts (
 
 create index if not exists contacts_user_id_idx on contacts (user_id);
 
+-- The Data API's Postgres roles (authenticator/anonymous/authenticated) get
+-- no table privileges by default — RLS only filters rows an already-granted
+-- role can see, it doesn't grant access on its own. Without this, every
+-- Data API request gets a blanket 403 regardless of the policies below.
+grant select, insert, update, delete on contacts to authenticated;
+
 -- Row Level Security: every policy is scoped to the signed-in user.
 alter table contacts enable row level security;
 
