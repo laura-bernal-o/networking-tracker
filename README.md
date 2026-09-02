@@ -4,13 +4,16 @@ A private, secure contact tracker for the people you want to stay connected
 with at Berkeley — companies, roles, where you met, notes, and a priority
 level, all scoped to your own account.
 
-**Live app:** _TODO: add the deployed Vercel URL here_
+**Live app:** https://networking-tracker-ochre.vercel.app
 
 ## Screenshots / walkthrough
 
-_TODO: add screenshots or a short recording of: sign-up/sign-in, adding a
-contact, editing, deleting, refresh-persistence, and the two-account privacy
-test. See [Evidence](#evidence) below for the exact list required._
+_TODO: add screenshots or a short recording of the live app above: sign-up/
+sign-in, adding a contact, editing, deleting, refresh-persistence, and the
+two-account privacy test. Every one of these flows has already been verified
+against the live deployment — see [Evidence](#evidence) for exactly what was
+checked and how; this section just needs the actual images/recording dropped
+in before submission._
 
 ## Features
 
@@ -79,6 +82,10 @@ test. See [Evidence](#evidence) below for the exact list required._
   `auth.user_id() = user_id`. See [Schema](#database-schema) below.
 - **Auth**: Neon Managed Better Auth, wired up client-side only
   (`BetterAuthReactAdapter`) — there is no custom auth server in this repo.
+  Because the Auth service lives on a different origin than the app, the
+  adapter is configured with `fetchOptions: { credentials: "include" }`
+  (`lib/neon.ts`) so the session cookie actually gets sent cross-origin;
+  without it the client silently falls back to an anonymous session.
 - **Hosting**: the whole app (frontend + `/api` routes) deploys as one
   Vercel project.
 
@@ -94,18 +101,39 @@ Prerequisites: Node 20+, a [Neon](https://neon.tech) account.
    npm install
    ```
 
-2. **Create a Neon project**
-   - In the [Neon console](https://console.neon.tech), create a project in
-     an **AWS** region (Managed Better Auth currently requires AWS).
-   - Open **Auth** in the sidebar and enable **Managed Better Auth**.
-   - Open **Data API** in the sidebar, enable it, and make sure **Use Neon
-     Auth** and **Grant public schema access** are both on.
-   - Copy the **Auth URL** and **Data API URL** shown on those pages.
+2. **Create a Neon project and enable Auth + the Data API**
+
+   Either through the [Neon console](https://console.neon.tech) — create a
+   project in an **AWS** region (Managed Better Auth requires AWS), open
+   **Auth** and enable Managed Better Auth, open **Data API** and enable it
+   with **Use Neon Auth** and **Grant public schema access** both on, then
+   copy the **Auth URL** and **Data API URL** shown on those pages —
+
+   or with the [Neon CLI](https://neon.com/docs/reference/neon-cli) (`npm i -g neon@latest`), which is what this repo was actually set up with:
+
+   ```bash
+   neon login
+   neon link --project-id <your-project-id> --branch production -y
+   neon config init   # scaffolds neon.ts
+   ```
+
+   then set `auth: true` and `dataApi: true` in the generated `neon.ts` and run:
+
+   ```bash
+   neon deploy   # enables Auth + Data API, pulls the URLs into .env.local
+   ```
 
 3. **Create the schema**
    - Open the Neon **SQL Editor** and run the contents of
-     [`db/schema.sql`](db/schema.sql) (or `psql "$DATABASE_URL" -f db/schema.sql`
-     using the connection string from **Connect** in the console).
+     [`db/schema.sql`](db/schema.sql) (or `neon psql production --pooled
+     --role-name neondb_owner -- -f db/schema.sql`, or
+     `psql "$DATABASE_URL" -f db/schema.sql`).
+   - This must run as `neondb_owner` (or another owner-level role) — the
+     script both creates the table/policies and `GRANT`s table privileges to
+     the `authenticated` role the Data API uses. RLS policies alone are not
+     enough: Postgres also requires the role to have SELECT/INSERT/UPDATE/
+     DELETE grants on the table, or every Data API request gets a blanket
+     403 regardless of policy.
 
 4. **Configure environment variables**
 
@@ -162,6 +190,13 @@ See [`.env.example`](.env.example) for the full file with placeholder values.
   request automatically.
 - Postgres reads the JWT via the `pg_session_jwt` extension and exposes the
   user's id through `auth.user_id()`.
+- The Data API's Postgres roles (`authenticator` / `anonymous` /
+  `authenticated`) start with **no table privileges at all** — RLS only
+  filters rows a role can already see, it doesn't grant access on its own.
+  `db/schema.sql` explicitly runs
+  `grant select, insert, update, delete on contacts to authenticated;`
+  before enabling RLS; skipping this step is the single most common way to
+  get an opaque 403 from the Data API even with correct policies.
 - **Row Level Security is enabled on `contacts`**, with four separate
   policies:
 
@@ -207,22 +242,40 @@ handler. It verifies:
 - a fully valid contact passes
 - a contact with only the required fields (name + priority) passes
 
-Sample output:
+Sample output (from this repo, against the live Neon project):
 
 ```
-_TODO: paste `npm run test` output here_
+> networking-tracker@0.1.0 test
+> vitest run
+
+ RUN  v4.1.11 /networking-tracker
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Duration  498ms
 ```
 
 ## Deployment
 
-1. Push this repository to GitHub (public).
-2. In [Vercel](https://vercel.com), import the repository (or run
-   `vercel --prod` from the CLI).
-3. Add the production environment variables (`NEXT_PUBLIC_NEON_AUTH_URL`,
-   `NEXT_PUBLIC_NEON_DATA_API_URL`) in the Vercel project settings.
-4. In the Neon console, add your Vercel domain to Auth's trusted origins.
-5. Redeploy, then open the live URL in a private browser window and confirm
-   sign-up/sign-in work end to end.
+This repo is deployed at https://networking-tracker-ochre.vercel.app. Steps
+taken (same ones you'd repeat for your own deployment):
+
+1. `gh repo create networking-tracker --public --source=. --remote=origin`,
+   then `git push -u origin main`.
+2. `vercel link` to create/link the Vercel project, then add the two public
+   env vars for Production (`NEXT_PUBLIC_` variables need `--visibility
+   config --no-sensitive`, since Vercel otherwise defaults framework-prefixed
+   vars to a secret type that Production/Preview reject):
+   ```bash
+   vercel env add NEXT_PUBLIC_NEON_AUTH_URL production --visibility config --no-sensitive
+   vercel env add NEXT_PUBLIC_NEON_DATA_API_URL production --visibility config --no-sensitive
+   ```
+3. `vercel --prod` to build and deploy.
+4. `neon neon-auth domain add https://<your-app>.vercel.app` (or add it in
+   the Neon console under Auth → trusted domains) so the deployed origin can
+   complete auth flows.
+5. Open the live URL in a private browser window and confirm sign-up/sign-in
+   work end to end — verified above in [Evidence](#evidence).
 
 ## Known limitations and next steps
 
@@ -237,16 +290,48 @@ _TODO: paste `npm run test` output here_
 - The `/api/contacts/validate` backend check and the database `CHECK`
   constraints currently duplicate the same rules; a follow-up could
   generate one from the other.
+- On a hard page load, the header briefly shows "Sign in / Sign up" for
+  well under a second before the session resolves and flips to the signed-in
+  state (the `/contacts` page itself always waits for the real session before
+  rendering or redirecting, so this is cosmetic, not a security gap). A
+  follow-up could add a matching skeleton state to `SiteHeader` while
+  `useSession()` is pending.
 
 ## Evidence
 
-_TODO before submission — replace this section with:_
+- **Automated test**: see [Testing](#testing) above — `npm run test` passes
+  all 5 cases against the live schema/validation rules.
+- **Sign-in / sign-out**: verified live at
+  https://networking-tracker-ochre.vercel.app — created an account, was
+  redirected to `/contacts` signed in, clicked Sign out, was redirected back
+  to a signed-out header.
+- **Create / edit / delete / refresh**: verified live at the URL above —
+  added a contact, hard-reloaded the page (full navigation, not a client
+  route change) and confirmed it was still there, edited its name and
+  priority and confirmed the change stuck, then deleted it via the confirm
+  dialog and reloaded again to confirm the deletion persisted too.
+- **Invalid input fails safely**: submitting an empty (whitespace-only) name
+  shows an inline "Name is required" error on the field and does not close
+  the dialog or write anything; the same is true for a `priority` outside
+  `high`/`medium`/`low` (only reachable by bypassing the `<select>`, which
+  `/api/contacts/validate` and the database `CHECK` both still reject).
+- **Two-account privacy**: created `user-a-test@example.com` and
+  `user-b-test@example.com` against the live Neon project. As User B, called
+  the Data API directly (not through the UI) against a contact ID owned by
+  User A:
+  ```js
+  await neon.from("contacts").select("*").eq("id", userAContactId);   // → []
+  await neon.from("contacts").update({ name: "Hacked" }).eq("id", userAContactId); // → [] (0 rows)
+  await neon.from("contacts").delete().eq("id", userAContactId);      // → 0 rows deleted
+  ```
+  All three silently no-op under RLS — no error, no rows affected — and
+  signing back in as User A confirmed the contact was completely unchanged.
+  This proves the database enforces ownership, not just the UI.
+- **No secrets in Git**: `git ls-files | grep -i env` in this repo returns
+  only `.env.example`; `.env.local` (containing `DATABASE_URL`, the pooled/
+  unpooled connection strings, and the Vercel OIDC token) has never been
+  committed.
 
-- [ ] Automated test output showing at least one passing validation test
-- [ ] Screenshot/recording of sign-in and sign-out
-- [ ] Screenshot/recording of creating, editing, deleting, and refreshing a
-      contact
-- [ ] Two-account test showing User A cannot access User B's contacts
-- [ ] Screenshot of one invalid input failing safely (empty name or bad
-      priority)
-- [ ] Confirmation that no secret values are committed to Git
+_TODO before final submission: replace the prose above with the actual
+screenshots/recording of each flow on the live URL, per the assignment's
+evidence checklist — the flows themselves are already verified working._
