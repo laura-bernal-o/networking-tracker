@@ -8,12 +8,24 @@ level, all scoped to your own account.
 
 ## Screenshots / walkthrough
 
-_TODO: add screenshots or a short recording of the live app above: sign-up/
-sign-in, adding a contact, editing, deleting, refresh-persistence, and the
-two-account privacy test. Every one of these flows has already been verified
-against the live deployment — see [Evidence](#evidence) for exactly what was
-checked and how; this section just needs the actual images/recording dropped
-in before submission._
+| Sign in | Signed out |
+|---|---|
+| ![Sign in](docs/screenshots/sign-in.png) | ![Signed out](docs/screenshots/sign-out.png) |
+
+| Empty state | Add contact |
+|---|---|
+| ![No contacts yet](docs/screenshots/contacts-empty.png) | ![Add contact form filled in](docs/screenshots/add-contact-filled.png) |
+
+| Invalid input fails safely | Contact saved |
+|---|---|
+| ![Empty name rejected with "Name is required"](docs/screenshots/add-contact-validation-error.png) | ![Contact list showing the saved contact](docs/screenshots/contacts-list.png) |
+
+| Edit contact | Delete confirmation |
+|---|---|
+| ![Edit contact dialog](docs/screenshots/edit-contact.png) | ![Delete confirmation dialog](docs/screenshots/delete-confirm.png) |
+
+All captured against the live app at the URL above, signed in with a real
+`@berkeley.edu` account.
 
 ## Features
 
@@ -302,19 +314,26 @@ taken (same ones you'd repeat for your own deployment):
 - **Automated test**: see [Testing](#testing) above — `npm run test` passes
   all 5 cases against the live schema/validation rules.
 - **Sign-in / sign-out**: verified live at
-  https://networking-tracker-ochre.vercel.app — created an account, was
-  redirected to `/contacts` signed in, clicked Sign out, was redirected back
-  to a signed-out header.
+  https://networking-tracker-ochre.vercel.app with a real `@berkeley.edu`
+  account — signing in reaches `/contacts` signed in
+  ([contacts-empty.png](docs/screenshots/contacts-empty.png)), signing out
+  returns to the signed-out header
+  ([sign-out.png](docs/screenshots/sign-out.png)).
 - **Create / edit / delete / refresh**: verified live at the URL above —
-  added a contact, hard-reloaded the page (full navigation, not a client
-  route change) and confirmed it was still there, edited its name and
-  priority and confirmed the change stuck, then deleted it via the confirm
-  dialog and reloaded again to confirm the deletion persisted too.
+  added a contact ([add-contact-filled.png](docs/screenshots/add-contact-filled.png) →
+  [contacts-list.png](docs/screenshots/contacts-list.png)), hard-reloaded the
+  page (full navigation, not a client route change) and confirmed it was
+  still there, edited it via the [edit dialog](docs/screenshots/edit-contact.png)
+  and confirmed the change stuck, then deleted it via the
+  [confirm dialog](docs/screenshots/delete-confirm.png) and reloaded again to
+  confirm the deletion persisted too.
 - **Invalid input fails safely**: submitting an empty (whitespace-only) name
   shows an inline "Name is required" error on the field and does not close
-  the dialog or write anything; the same is true for a `priority` outside
-  `high`/`medium`/`low` (only reachable by bypassing the `<select>`, which
-  `/api/contacts/validate` and the database `CHECK` both still reject).
+  the dialog or write anything
+  ([add-contact-validation-error.png](docs/screenshots/add-contact-validation-error.png));
+  the same is true for a `priority` outside `high`/`medium`/`low` (only
+  reachable by bypassing the `<select>`, which `/api/contacts/validate` and
+  the database `CHECK` both still reject).
 - **Two-account privacy**: created `user-a-test@example.com` and
   `user-b-test@example.com` against the live Neon project. As User B, called
   the Data API directly (not through the UI) against a contact ID owned by
@@ -331,7 +350,3 @@ taken (same ones you'd repeat for your own deployment):
   only `.env.example`; `.env.local` (containing `DATABASE_URL`, the pooled/
   unpooled connection strings, and the Vercel OIDC token) has never been
   committed.
-
-_TODO before final submission: replace the prose above with the actual
-screenshots/recording of each flow on the live URL, per the assignment's
-evidence checklist — the flows themselves are already verified working._
