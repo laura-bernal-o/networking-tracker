@@ -24,8 +24,14 @@ level, all scoped to your own account.
 |---|---|
 | ![Edit contact dialog](docs/screenshots/edit-contact.png) | ![Delete confirmation dialog](docs/screenshots/delete-confirm.png) |
 
-All captured against the live app at the URL above, signed in with a real
-`@berkeley.edu` account.
+| Account A has a contact | Account B sees nothing |
+|---|---|
+| ![laurabernal@berkeley.edu with one contact](docs/screenshots/two-account-user-a.png) | ![A completely different account, signed in, seeing 0 contacts](docs/screenshots/two-account-user-b-empty.png) |
+
+All captured against the live app at the URL above. The first six flows used
+a real `@berkeley.edu` account; the last pair uses two distinct accounts
+(`laurabernal@berkeley.edu` and a separate `@hotmail.com` address) to show
+each only ever sees its own contacts.
 
 ## Features
 
@@ -334,10 +340,16 @@ taken (same ones you'd repeat for your own deployment):
   the same is true for a `priority` outside `high`/`medium`/`low` (only
   reachable by bypassing the `<select>`, which `/api/contacts/validate` and
   the database `CHECK` both still reject).
-- **Two-account privacy**: created `user-a-test@example.com` and
-  `user-b-test@example.com` against the live Neon project. As User B, called
-  the Data API directly (not through the UI) against a contact ID owned by
-  User A:
+- **Two-account privacy**: two distinct accounts on the live app —
+  `laurabernal@berkeley.edu`, which has one contact
+  ([two-account-user-a.png](docs/screenshots/two-account-user-a.png)), and a
+  separate `@hotmail.com` account that sees 0 contacts despite being signed
+  in at the same time
+  ([two-account-user-b-empty.png](docs/screenshots/two-account-user-b-empty.png)).
+  This was also verified below the UI layer: using two other test accounts
+  (`user-a-test@example.com` / `user-b-test@example.com`) against the live
+  Neon project, User B called the Data API directly — not through the UI —
+  against a contact ID owned by User A:
   ```js
   await neon.from("contacts").select("*").eq("id", userAContactId);   // → []
   await neon.from("contacts").update({ name: "Hacked" }).eq("id", userAContactId); // → [] (0 rows)
@@ -345,7 +357,9 @@ taken (same ones you'd repeat for your own deployment):
   ```
   All three silently no-op under RLS — no error, no rows affected — and
   signing back in as User A confirmed the contact was completely unchanged.
-  This proves the database enforces ownership, not just the UI.
+  This proves the database enforces ownership, not just the UI: even a
+  handcrafted request that skips the UI entirely still can't touch another
+  user's row.
 - **No secrets in Git**: `git ls-files | grep -i env` in this repo returns
   only `.env.example`; `.env.local` (containing `DATABASE_URL`, the pooled/
   unpooled connection strings, and the Vercel OIDC token) has never been
